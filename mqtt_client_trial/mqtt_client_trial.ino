@@ -29,7 +29,7 @@
 
 const char* ssid = privateSSID;  //this is defined in ssidParameters.h
 const char* password = privateWiFiPassword; //this is defined in ssidParameters.h
-const char* mqtt_server = "192.168.1.110";
+const char* mqtt_server = privateMQTTServer;
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -124,7 +124,7 @@ void setup() {
   client.setCallback(callback);
   pinMode(D5, INPUT);
   pinMode(D6, INPUT);
-  ArduinoOTA.setHostname("yardCircleSensorModule"); // give an name to our module
+  ArduinoOTA.setHostname("mqtt_tester"); // give an name to our module
   ArduinoOTA.begin(); // OTA initialization
   
 }
