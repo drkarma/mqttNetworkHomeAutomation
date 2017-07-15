@@ -17,7 +17,8 @@
   - Open the "Tools -> Board -> Board Manager" and click install for the ESP8266"
   - Select your ESP8266 in "Tools -> Board"
 */
-#include "testSSIDParameters.h"
+//#include "testSSIDParameters.h"
+#include "ssidParameters.h"
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <ESP8266mDNS.h>
