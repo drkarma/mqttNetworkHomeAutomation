@@ -19,6 +19,7 @@ int value = 0;
 int updateInoDelay = 30000; // If there is an update announced then do a 30 sec delay
 bool updatingInProgress = false; // This global variable will be set true if we get a update request sent to us
 const char* mqtt_server = privateMQTTServer;
+String myMACaddress;
 
 
 void setup() {
@@ -56,6 +57,9 @@ void setup() {
 
   //if you get here you have connected to the WiFi
   Serial.println("connected...yeey :)");
+  myMACaddress = WiFi.macAddress();
+  myMACaddress.replace(":", "");
+  Serial.println(myMACaddress);
  
 }
 
@@ -63,6 +67,18 @@ void callback(char* topic, byte* payload, unsigned int length) {
   if (strcmp(topic,"/oam/updateino/yard/circle")==0) {
     // We are requested to do an update
     updatingInProgress = true; // We set this true now
+    
+  }
+  // are we getting a request to reset wifi? (Taking a module out of testing mode and preparing for other network)
+  
+  if ((String(topic) == "/oam/resetwifi/"+ myMACaddress)) {
+    // We got the request
+    if ((String(topic).indexOf(myMACaddress)) != -1){
+      client.publish("/oam/confirm/", "CONFIRMED MAC"); 
+      WiFiManager wifiManager;
+      wifiManager.resetSettings();
+    }
+     
     
   }
   Serial.print("Message arrived [");
@@ -103,6 +119,7 @@ void reconnect() {
       client.subscribe("/yard/circle/pir-1");
       client.subscribe("/yard/circle/pir-2");
       client.subscribe("/oam/updateino/yard/circle");
+      client.subscribe("/oam/resetwifi/#");
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
