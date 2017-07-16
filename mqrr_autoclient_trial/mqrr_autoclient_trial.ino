@@ -1,37 +1,15 @@
-/*
- Basic ESP8266 MQTT example
- This sketch demonstrates the capabilities of the pubsub library in combination
- with the ESP8266 board/library.
- It connects to an MQTT server then:
-  - publishes "hello world" to the topic "outTopic" every two seconds
-  - subscribes to the topic "inTopic", printing out any messages
-    it receives. NB - it assumes the received payloads are strings not binary
-  - If the first character of the topic "inTopic" is an 1, switch ON the ESP Led,
-    else switch it off
- It will reconnect to the server if the connection is lost using a blocking
- reconnect function. See the 'mqtt_reconnect_nonblocking' example for how to
- achieve the same result without blocking the main loop.
- To install the ESP8266 board, (using Arduino 1.6.4+):
-  - Add the following 3rd party board manager under "File -> Preferences -> Additional Boards Manager URLs":
-       http://arduino.esp8266.com/stable/package_esp8266com_index.json
-  - Open the "Tools -> Board -> Board Manager" and click install for the ESP8266"
-  - Select your ESP8266 in "Tools -> Board"
-*/
-//#include "testSSIDParameters.h"
-#include "ssidParameters.h"
-#include <ESP8266WiFi.h>
+#include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino
+
+//needed for library
+#include <DNSServer.h>
+#include <ESP8266WebServer.h>
+#include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager
 #include <PubSubClient.h>
-#include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
+#include "ssidParameters.h" // To be removed once we can update MQTT server online
 
-
-// Update these with values suitable for your network.
-
-const char* ssid = privateSSID;  //this is defined in ssidParameters.h
-const char* password = privateWiFiPassword; //this is defined in ssidParameters.h
-const char* mqtt_server = privateMQTTServer;
-
+//GLOBAL STUFF ON TOP
 WiFiClient espClient;
 PubSubClient client(espClient);
 long lastMsg = 0;
@@ -40,27 +18,45 @@ char msg[50];
 int value = 0;
 int updateInoDelay = 30000; // If there is an update announced then do a 30 sec delay
 bool updatingInProgress = false; // This global variable will be set true if we get a update request sent to us
-void setup_wifi() {
+const char* mqtt_server = privateMQTTServer;
 
-  delay(10);
-  // We start by connecting to a WiFi network
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
 
-  WiFi.begin(ssid, password);
+void setup() {
+  // put your setup code here, to run once:
+  Serial.begin(115200);
+  pinMode(BUILTIN_LED, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
+  ArduinoOTA.setHostname("mqttClientType"); // give an name to our module
+  ArduinoOTA.begin(); // OTA initialization
+  client.setServer(mqtt_server, 1883);
+  client.setCallback(callback);
+  pinMode(D5, INPUT);
+  pinMode(D6, INPUT);
+  //WiFiManager
+  //Local intialization. Once its business is done, there is no need to keep it around
+  WiFiManager wifiManager;
+  //reset settings - for testing
+  //wifiManager.resetSettings();
 
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
+  //sets timeout until configuration portal gets turned off
+  //useful to make it all retry or go to sleep
+  //in seconds
+  wifiManager.setTimeout(180);
+  
+  //fetches ssid and pass and tries to connect
+  //if it does not connect it starts an access point with the specified name
+  //here  "AutoConnectAP"
+  //and goes into a blocking loop awaiting configuration
+  if(!wifiManager.autoConnect("AutoConnectAP")) {
+    Serial.println("failed to connect and hit timeout");
+    delay(3000);
+    //reset and try again, or maybe put it to deep sleep
+    ESP.reset();
+    delay(5000);
+  } 
 
-  randomSeed(micros());
-
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
+  //if you get here you have connected to the WiFi
+  Serial.println("connected...yeey :)");
+ 
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -117,21 +113,11 @@ void reconnect() {
   }
 }
 
-void setup() {
-  pinMode(BUILTIN_LED, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
-  Serial.begin(115200);
-  setup_wifi();
-  client.setServer(mqtt_server, 1883);
-  client.setCallback(callback);
-  pinMode(D5, INPUT);
-  pinMode(D6, INPUT);
-  ArduinoOTA.setHostname("mqtt_tester"); // give an name to our module
-  ArduinoOTA.begin(); // OTA initialization
-  
-}
+
 
 void loop() {
-  ArduinoOTA.handle(); 
+  // put your main code here, to run repeatedly:
+ ArduinoOTA.handle(); 
   int pirOneValue = digitalRead(D5);
   int pirTwoValue = digitalRead(D6);
   if (!client.connected()) {
@@ -151,7 +137,7 @@ void loop() {
   if (now - lastMsg > 2000) {
     lastMsg = now;
     ++value;
-    snprintf (msg, 75, "Autoconf #%ld", value);
+    snprintf (msg, 75, "Autoconf hello world #%ld", value);
     Serial.print("Publish message: ");
     Serial.println(msg);
     client.publish("/sensor/outside/temp", msg);
@@ -167,3 +153,4 @@ void loop() {
     client.publish("/oam/heartbeat/sensormodule", "AutoConfigWifiManager");
   }
 }
+
