@@ -112,12 +112,12 @@ void reconnect() {
     {
       Serial.println("connected");
       // Once connected, publish an announcement...
-      client.publish("/yard/circle/pir-1", "Established PIR1");
-      client.publish("/yard/circle/pir-2", "Established PIR2");
+      client.publish("/house/kitchen/pir-1", "Established Kitchen PIR1");
+      client.publish("/house/kitchen/pir-2", "Established Kitchen PIR2");
 
       // ... and resubscribe
-      client.subscribe("/yard/circle/pir-1");
-      client.subscribe("/yard/circle/pir-2");
+      client.subscribe("/house/kitchen/pir-1");
+      client.subscribe("/house/kitchen/pir-2");
       client.subscribe("/oam/updateino/yard/circle");
       client.subscribe("/oam/resetwifi/#");
     } else {
@@ -159,15 +159,15 @@ void loop() {
     Serial.println(msg);
     client.publish("/sensor/outside/temp", msg);
     if(pirOneValue == 1) {
-      client.publish("/yard/circle/pir-1", "1");
+      client.publish("/house/kitchen/pir-1", "1");
     }
     if(pirTwoValue == 2) {
-      client.publish("/yard/circle/pir-2", "1");
+      client.publish("/house/kitchen/pir-2", "1");
     }
   }
   if (now - lastHeartBeat > 90000) {
     lastHeartBeat = now;
-    client.publish("/oam/heartbeat/sensormodule", "AutoConfigWifiManager");
+    client.publish("/oam/heartbeat/sensormodule", "AutoConfigWifiManager - " +char(myMACaddress));
   }
 }
 
