@@ -157,7 +157,7 @@ void loop() {
     if(pirOneValue == 1) {
       client.publish("/yard/circle/pir-1", "1");
     }
-    if(pirTwoValue == 2) {
+    if(pirTwoValue == 1) {
       client.publish("/yard/circle/pir-2", "1");
     }
   }

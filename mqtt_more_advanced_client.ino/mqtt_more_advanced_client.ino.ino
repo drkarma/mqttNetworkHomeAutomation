@@ -15,6 +15,8 @@
 #include <ArduinoJson.h>          //https://github.com/bblanchon/ArduinoJson
 
 //Global stuff
+
+
 WiFiClient espClient;
 PubSubClient client(espClient);
 ///DHT DEFINES
@@ -44,7 +46,7 @@ String myMACaddress;
 char mqtt_server[40] = "192.168.1.110";
 char mqtt_port[6] = "1883";
 char blynk_token[34] = "YOUR_BLYNK_TOKEN";
-
+char thisModule[34] = "/yard/circle";
 //flag for saving data
 bool shouldSaveConfig = false;
 
@@ -94,6 +96,8 @@ void setup() {
           strcpy(mqtt_server, json["mqtt_server"]);
           strcpy(mqtt_port, json["mqtt_port"]);
           strcpy(blynk_token, json["blynk_token"]);
+          strcpy(thisModule, json["thisModule"]);
+
 
         } else {
           Serial.println("failed to load json config");
@@ -109,7 +113,7 @@ void setup() {
   Serial.print("MQTT server: " + String(mqtt_server) + "\n");
   Serial.print("MQTT port: " + String(mqtt_port) + "\n");
   Serial.print("Blynk token: " + String(blynk_token) + "\n");
-  
+   Serial.print("thisModule: " + String(thisModule) + "\n");
 
 
   // The extra parameters to be configured (can be either global or just in the setup)
@@ -118,6 +122,7 @@ void setup() {
   WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
   WiFiManagerParameter custom_mqtt_port("port", "mqtt port", mqtt_port, 5);
   WiFiManagerParameter custom_blynk_token("blynk", "blynk token", blynk_token, 32);
+  WiFiManagerParameter custom_thisModule("thisModule", "thisModule", thisModule, 32);
 
   //WiFiManager
   //Local intialization. Once its business is done, there is no need to keep it around
@@ -168,7 +173,8 @@ void setup() {
   strcpy(mqtt_server, custom_mqtt_server.getValue());
   strcpy(mqtt_port, custom_mqtt_port.getValue());
   strcpy(blynk_token, custom_blynk_token.getValue());
-
+  strcpy(thisModule, custom_thisModule.getValue());
+  
   //save the custom parameters to FS
   if (shouldSaveConfig) {
     Serial.println("saving config");
@@ -177,7 +183,7 @@ void setup() {
     json["mqtt_server"] = mqtt_server;
     json["mqtt_port"] = mqtt_port;
     json["blynk_token"] = blynk_token;
-
+    json["thisModule"] = thisModule;
     File configFile = SPIFFS.open("/config.json", "w");
     if (!configFile) {
       Serial.println("failed to open config file for writing");
@@ -205,7 +211,8 @@ void setup() {
   Serial.print("MQTT server: " + String(mqtt_server) + "\n");
   Serial.print("MQTT port: " + String(mqtt_port) + "\n");
   Serial.print("Blynk token: " + String(blynk_token) + "\n");
-
+  Serial.print("thisModule: " + String(thisModule) + "\n");
+  
   //Now activate the DHT sensor
   dht.begin();
   sensor_t sensor;
@@ -252,9 +259,16 @@ void callback(char* topic, byte* payload, unsigned int length) {
       WiFiManager wifiManager;
       wifiManager.resetSettings();
     }
+  }
+   if ((String(topic) == "/oam/whoareyou/")) {
+    // We got the request
+    
+      client.publish("/oam/iam" , "Call me Bob "); 
+    
+    }
      
     
-  }
+  
   Serial.print("Message arrived [");
   Serial.print(topic);
   Serial.print("] ");
@@ -295,6 +309,7 @@ void reconnect() {
       client.subscribe("/yard/circle/pir-1");
       client.subscribe("/yard/circle/pir-2");
       client.subscribe("/oam/updateino/yard/circle");
+      client.subscribe("/oam/whoareyou");
       client.subscribe("/oam/resetwifi/#");
     } else {
       Serial.print("failed, rc=");
@@ -339,7 +354,7 @@ void loop() {
     if(pirOneValue == 1) {
       client.publish("/yard/circle/pir-1", "1");
     }
-    if(pirTwoValue == 2) {
+    if(pirTwoValue == 1) {
       client.publish("/yard/circle/pir-2", "1");
     }
      // delay(delayMS);
