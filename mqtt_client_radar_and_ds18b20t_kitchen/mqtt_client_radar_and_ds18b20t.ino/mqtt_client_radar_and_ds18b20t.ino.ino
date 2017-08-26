@@ -10,23 +10,19 @@
 #include <ArduinoOTA.h>           // Needed for Online uploading
 
 #include "Adafruit_Sensor.h"
-#include <DHT.h>
-#include <DHT_U.h>
+
 #include <ArduinoJson.h>          //https://github.com/bblanchon/ArduinoJson
+#include <OneWire.h>
+
 
 //Global stuff
 
-
 WiFiClient espClient;
 PubSubClient client(espClient);
-///DHT DEFINES
-#define DHTPIN            D4         // Pin which is connected to the DHT sensor. Corresponding to D4
-// Uncomment the type of sensor in use:
-//#define DHTTYPE           DHT11     // DHT 11 
-#define DHTTYPE           DHT22     // DHT 22 (AM2302)
-//#define DHTTYPE           DHT21     // DHT 21 (AM2301)
-DHT_Unified dht(DHTPIN, DHTTYPE);
-uint32_t delayMS;
+
+OneWire  ds(D2); 
+
+
 String tmp_temp; //see last code block below use these to convert the float that you get back from DHT to a string =str
 String tmp_hum;
 char temp[50]; // In order to send over MQTT
@@ -74,7 +70,7 @@ void setup() {
   Serial.begin(9600);
   Serial.println();
   //Be capable to do remote updates for the esp8266 based board
-  ArduinoOTA.setHostname("mqttYardCircle"); // give an name to our module
+  ArduinoOTA.setHostname("mqttOnHouseValleyside"); // give an name to our module
   ArduinoOTA.begin(); // OTA initialization
   Serial.println("OTA Enabled...");
 
@@ -216,6 +212,7 @@ void setup() {
   pinMode(D5, INPUT);
   pinMode(D6, INPUT);
   pinMode(D7, INPUT);
+  pinMode(D1, OUTPUT); // RELAY D1
   
   //At this point we have either failed to mount the FS, failed to read the config parameters or successfully read it.
   Serial.println("Status of parameters");
@@ -224,33 +221,103 @@ void setup() {
   Serial.print("Blynk token: " + String(blynk_token) + "\n");
   Serial.print("thisModule: " + String(thisModule) + "\n");
   
-  //Now activate the DHT sensor
-  dht.begin();
-  sensor_t sensor;
-  dht.temperature().getSensor(&sensor);
-   Serial.println("------------------------------------");
-  Serial.println("Temperature");
-  Serial.print  ("Sensor:       "); Serial.println(sensor.name);
-  Serial.print  ("Driver Ver:   "); Serial.println(sensor.version);
-  Serial.print  ("Unique ID:    "); Serial.println(sensor.sensor_id);
-  Serial.print  ("Max Value:    "); Serial.print(sensor.max_value); Serial.println(" *C");
-  Serial.print  ("Min Value:    "); Serial.print(sensor.min_value); Serial.println(" *C");
-  Serial.print  ("Resolution:   "); Serial.print(sensor.resolution); Serial.println(" *C");  
-  Serial.println("------------------------------------");
-  // Print humidity sensor details.
-  dht.humidity().getSensor(&sensor);
-  Serial.println("------------------------------------");
-  Serial.println("Humidity");
-  Serial.print  ("Sensor:       "); Serial.println(sensor.name);
-  Serial.print  ("Driver Ver:   "); Serial.println(sensor.version);
-  Serial.print  ("Unique ID:    "); Serial.println(sensor.sensor_id);
-  Serial.print  ("Max Value:    "); Serial.print(sensor.max_value); Serial.println("%");
-  Serial.print  ("Min Value:    "); Serial.print(sensor.min_value); Serial.println("%");
-  Serial.print  ("Resolution:   "); Serial.print(sensor.resolution); Serial.println("%");  
-  Serial.println("------------------------------------");
-  // Set delay between sensor readings based on sensor details.
-  delayMS = sensor.min_delay / 1000;
+ 
 }
+
+//*************************************
+// Temperature function
+//*************************************
+void temperature(){
+
+  byte i;
+  byte present = 0;
+  byte type_s;
+  byte data[12];
+  byte addr[8];
+  float celsius, fahrenheit;
+  
+  if ( !ds.search(addr)) {
+  /// Serial.println("No more addresses.");
+   /// Serial.println();
+    ds.reset_search();
+    delay(250);
+    return;
+  }
+
+  
+  for( i = 0; i < 8; i++) {  
+    addr[i];
+  }
+
+  if (OneWire::crc8(addr, 7) != addr[7]) {
+      Serial.println("CRC is not valid!");
+      return;
+  }
+//  Serial.println();
+ 
+  // the first ROM byte indicates which chip
+  switch (addr[0]) {
+    case 0x10:
+
+      type_s = 1;
+      break;
+    case 0x28:
+
+      type_s = 0;
+      break;
+    case 0x22:
+    //  Serial.println("  Chip = DS1822");
+      type_s = 0;
+      break;
+    default:
+    //  Serial.println("Device is not a DS18x20 family device.");
+      return;
+  } 
+
+  ds.reset();
+  ds.select(addr);
+  ds.write(0x44, 1);      
+  
+ // delay(1000);    
+
+//  delay(1000);    
+  
+  present = ds.reset();
+  ds.select(addr);    
+  ds.write(0xBE);         
+
+  for ( i = 0; i < 9; i++) {       
+    data[i] = ds.read();
+  }
+  OneWire::crc8(data, 8); 
+  int16_t raw = (data[1] << 8) | data[0];
+  if (type_s) {
+    raw = raw << 3; 
+    if (data[7] == 0x10) {      
+      raw = (raw & 0xFFF0) + 12 - data[6];    }
+  } else {
+    byte cfg = (data[4] & 0x60);
+
+    if (cfg == 0x00) raw = raw & ~7;  // 9 bit resolution, 93.75 ms
+    else if (cfg == 0x20) raw = raw & ~3; // 10 bit res, 187.5 ms
+    else if (cfg == 0x40) raw = raw & ~1; // 11 bit res, 375 ms
+    
+  }
+
+ 
+  celsius = (float)raw / 16.0;
+ //  Serial.println("Reading temperature data");
+ //  Serial.println(celsius);    
+   
+   char temperaturenow [15];
+   dtostrf(celsius,7, 1, temperaturenow);  //// convert float to char (7, 1 where the 1 was 3 this is the amount of numbers after the .)
+ //  Serial.println(temperaturenow);      
+   client.publish("/onhouse/valleyside/temp", temperaturenow);    /// send char
+}
+
+
+
+
 
 //**************************************
 // callback function
@@ -274,7 +341,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
    if ((String(topic) == "/oam/whoareyou/")) {
     // We got the request
     
-      client.publish("/oam/iam" , "Call me Bob "); 
+      client.publish("/oam/iam" , "Call me Valleyside "); 
     
     }
      
@@ -313,14 +380,15 @@ void reconnect() {
     {
       Serial.println("connected");
       // Once connected, publish an announcement...
-      client.publish("/yard/circle/pir-1", "Established PIR1");
-      client.publish("/yard/circle/pir-2", "Established PIR2");
-      client.publish("/yard/circle/pir-3", "Established PIR3");
+      client.publish("/onhouse/valleyside/temp", "Established DS18B20");
+      client.publish("/onhouse/valleyside/radar", "Established Motiondetector");
+      //client.publish("/yard/circle/pir-2", "Established PIR2");
+      //client.publish("/yard/circle/pir-3", "Established PIR3");
       // ... and resubscribe
-      client.subscribe("/yard/circle/pir-1");
-      client.subscribe("/yard/circle/pir-2");
-      client.subscribe("/yard/circle/pir-3");
-      client.subscribe("/oam/updateino/yard/circle");
+      client.subscribe("/onhouse/valleyside/temp");
+      client.subscribe("/onhouse/valleyside/radar");
+      //client.subscribe("/yard/circle/pir-3");
+      client.subscribe("/oam/updateino/onhouse/valleyside");
       client.subscribe("/oam/whoareyou");
       client.subscribe("/oam/resetwifi/#");
     } else {
@@ -347,9 +415,9 @@ void loop() {
     reconnect();
   }
   if (updatingInProgress) {
-    client.publish("/yard/circle/radar", "offline");
-    client.publish("/yard/circle/pir-2", "offline");
-    client.publish("/yard/circle/pir-3", "offline");
+    client.publish("/onhouse/valleyside/radar", "offline");
+    client.publish("/onhouse/valleyside/temp", "offline");
+   // client.publish("/yard/circle/pir-3", "offline");
     delay(updateInoDelay);
     updatingInProgress = false;
     }
@@ -361,85 +429,50 @@ void loop() {
     lastMsg = now;
 
     if(inputD5Value == 1) {
-      client.publish("/yard/circle/radar", "1");
+      client.publish("/onhouse/valleyside/radar", "1");
       messInputD5 = true;
     }
     else if (inputD5Value == 0 && messInputD5){
-        client.publish("/yard/circle/radar", "0");
+        client.publish("/onhouse/valleyside/radar", "0");
         messInputD5 == false;
         }
     
     if(inputD6Value == 1) {
-      client.publish("/yard/circle/pir-2", "1");
+      //client.publish("/yard/circle/pir-2", "1");
       messInputD6 = true;
 
     }
     else if (inputD6Value == 0 && messInputD6){
-        client.publish("/yard/circle/pir-2", "0");
+       // client.publish("/yard/circle/pir-2", "0");
         messInputD6 == false;
         }
     
      if(inputD7Value == 1) {
-      client.publish("/yard/circle/pir-3", "1");
+      // client.publish("/yard/circle/pir-3", "1");
       messInputD7 = true;
     }
     else if (inputD7Value == 0 && messInputD7){
-        client.publish("/yard/circle/pir-3", "0");
+        //client.publish("/yard/circle/pir-3", "0");
         messInputD7 == false;
         }
     
 
-  } // End of 1500ms loop
+  } // End of 1000ms loop
+
+  if (now - lastTenSecond > 10000) {
+    lastTenSecond = now;
+    temperature();   // Do tempreadings every 10 seconds
+    //Serial.println("Got to tempreading");
+  }
+  
   if (now - lastThirtySecond > 30000){
     lastThirtySecond = now;
-    //Serial.println("Delay 2 sec for DHT sensor");
-    //delay(2000);
-    // Get temperature event and print its value.
-    sensors_event_t event;  
-    dht.temperature().getEvent(&event);
-    if (isnan(event.temperature)) {
-      Serial.println("Error reading temperature!");
-      client.publish("/yard/circle/temp", "Error reading temperature");
-      firstTempreadDone = false;
-
-    }
-    else {
-      if (!firstTempreadDone){
-        client.publish("/yard/circle/temp", "TempOK");
-        firstTempreadDone = true;
-      }
-      tmp_temp = String(event.temperature);
-      tmp_temp.toCharArray(temp, tmp_temp.length() + 1); //packaging up the data to publish to mqtt whoa...
-      Serial.print("Temperature: ");
-      Serial.print(tmp_temp);
-      Serial.println(" *C");
-      client.publish("/yard/circle/temp", temp);
   
-    }
-    // Get humidity event and print its value.
-    dht.humidity().getEvent(&event);
-    if (isnan(event.relative_humidity)) {
-      Serial.println("Error reading humidity!");
-      client.publish("/yard/circle/humidity", "Error reading humidity");
-      firstHumidityreadDone = false;
-    }
-    else {
-      if (!firstHumidityreadDone){
-        client.publish("/yard/circle/humidity", "HumidityOK");
-        firstHumidityreadDone = true;
-      }
-      tmp_hum = String(event.relative_humidity);
-      tmp_hum.toCharArray(hum, tmp_hum.length() + 1); //packaging up the data to publish to mqtt whoa...
-      Serial.print("Humidity: ");
-      Serial.print(tmp_hum);
-      Serial.println("%");
-      client.publish("/yard/circle/humidity", hum);
-    }
     
   }
   
   if (now - lastHeartBeat > 90000) {
     lastHeartBeat = now;
-    client.publish("/oam/heartbeat/sensormodule", "mqttYardCircle");
+    client.publish("/oam/heartbeat/sensormodule", "mqttOnhouseValleyside");
   }
 }

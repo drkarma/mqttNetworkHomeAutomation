@@ -9,9 +9,7 @@
 #include <PubSubClient.h>
 #include <ArduinoOTA.h>           // Needed for Online uploading
 
-#include "Adafruit_Sensor.h"
-#include <DHT.h>
-#include <DHT_U.h>
+
 #include <ArduinoJson.h>          //https://github.com/bblanchon/ArduinoJson
 
 //Global stuff
@@ -19,23 +17,11 @@
 
 WiFiClient espClient;
 PubSubClient client(espClient);
-///DHT DEFINES
-#define DHTPIN            D4         // Pin which is connected to the DHT sensor. Corresponding to D4
-// Uncomment the type of sensor in use:
-//#define DHTTYPE           DHT11     // DHT 11 
-#define DHTTYPE           DHT22     // DHT 22 (AM2302)
-//#define DHTTYPE           DHT21     // DHT 21 (AM2301)
-DHT_Unified dht(DHTPIN, DHTTYPE);
-uint32_t delayMS;
-String tmp_temp; //see last code block below use these to convert the float that you get back from DHT to a string =str
-String tmp_hum;
-char temp[50]; // In order to send over MQTT
-char hum[50]; // In order to send over MQTT
+
 
 
 ///= My MQTT stuff
-bool firstTempreadDone = false;
-bool firstHumidityreadDone = false;
+
 long lastMsg = 0;
 long lastTenSecond = 0;
 long lastHeartBeat = 0;
@@ -54,9 +40,9 @@ char thisModule[34] = "/yard/circle";
 //flag for saving data
 bool shouldSaveConfig = false;
 
-bool messInputD5 = false;
-bool messInputD6 = false;
-bool messInputD7 = false;
+bool messPir1 = false;
+bool messPir2 = false;
+bool messPir3 = false;
 
 
 
@@ -74,7 +60,7 @@ void setup() {
   Serial.begin(9600);
   Serial.println();
   //Be capable to do remote updates for the esp8266 based board
-  ArduinoOTA.setHostname("mqttYardCircle"); // give an name to our module
+  ArduinoOTA.setHostname("mqttSonoff-1"); // give an name to our module
   ArduinoOTA.begin(); // OTA initialization
   Serial.println("OTA Enabled...");
 
@@ -213,10 +199,10 @@ void setup() {
   client.setCallback(callback);
 
   //Our pinconfiguration
-  pinMode(D5, INPUT);
-  pinMode(D6, INPUT);
-  pinMode(D7, INPUT);
-  
+//  pinMode(D5, INPUT);
+//  pinMode(D6, INPUT);
+//  pinMode(D7, INPUT);
+//  
   //At this point we have either failed to mount the FS, failed to read the config parameters or successfully read it.
   Serial.println("Status of parameters");
   Serial.print("MQTT server: " + String(mqtt_server) + "\n");
@@ -224,32 +210,7 @@ void setup() {
   Serial.print("Blynk token: " + String(blynk_token) + "\n");
   Serial.print("thisModule: " + String(thisModule) + "\n");
   
-  //Now activate the DHT sensor
-  dht.begin();
-  sensor_t sensor;
-  dht.temperature().getSensor(&sensor);
-   Serial.println("------------------------------------");
-  Serial.println("Temperature");
-  Serial.print  ("Sensor:       "); Serial.println(sensor.name);
-  Serial.print  ("Driver Ver:   "); Serial.println(sensor.version);
-  Serial.print  ("Unique ID:    "); Serial.println(sensor.sensor_id);
-  Serial.print  ("Max Value:    "); Serial.print(sensor.max_value); Serial.println(" *C");
-  Serial.print  ("Min Value:    "); Serial.print(sensor.min_value); Serial.println(" *C");
-  Serial.print  ("Resolution:   "); Serial.print(sensor.resolution); Serial.println(" *C");  
-  Serial.println("------------------------------------");
-  // Print humidity sensor details.
-  dht.humidity().getSensor(&sensor);
-  Serial.println("------------------------------------");
-  Serial.println("Humidity");
-  Serial.print  ("Sensor:       "); Serial.println(sensor.name);
-  Serial.print  ("Driver Ver:   "); Serial.println(sensor.version);
-  Serial.print  ("Unique ID:    "); Serial.println(sensor.sensor_id);
-  Serial.print  ("Max Value:    "); Serial.print(sensor.max_value); Serial.println("%");
-  Serial.print  ("Min Value:    "); Serial.print(sensor.min_value); Serial.println("%");
-  Serial.print  ("Resolution:   "); Serial.print(sensor.resolution); Serial.println("%");  
-  Serial.println("------------------------------------");
-  // Set delay between sensor readings based on sensor details.
-  delayMS = sensor.min_delay / 1000;
+  
 }
 
 //**************************************
@@ -340,14 +301,14 @@ void reconnect() {
 void loop() {
   //Make us remotely upgradeable
   ArduinoOTA.handle(); 
-  int inputD5Value = digitalRead(D5);
-  int inputD6Value = digitalRead(D6);
-  int inputD7Value = digitalRead(D7);
+  int pirOneValue = 0;
+  int pirTwoValue = 0;
+  int pirThreeValue = 0;
   if (!client.connected()) {
     reconnect();
   }
   if (updatingInProgress) {
-    client.publish("/yard/circle/radar", "offline");
+    client.publish("/yard/circle/pir-1", "offline");
     client.publish("/yard/circle/pir-2", "offline");
     client.publish("/yard/circle/pir-3", "offline");
     delay(updateInoDelay);
@@ -360,86 +321,44 @@ void loop() {
   if (now - lastMsg > 1000) {
     lastMsg = now;
 
-    if(inputD5Value == 1) {
-      client.publish("/yard/circle/radar", "1");
-      messInputD5 = true;
+    if(pirOneValue == 1) {
+      client.publish("/yard/circle/pir-1", "1");
+      messPir1 = true;
     }
-    else if (inputD5Value == 0 && messInputD5){
-        client.publish("/yard/circle/radar", "0");
-        messInputD5 == false;
+    else if (pirOneValue == 0 && messPir1){
+        client.publish("/yard/circle/pir-1", "0");
+        messPir1 == false;
         }
     
-    if(inputD6Value == 1) {
+    if(pirTwoValue == 1) {
       client.publish("/yard/circle/pir-2", "1");
-      messInputD6 = true;
+      messPir2 = true;
 
     }
-    else if (inputD6Value == 0 && messInputD6){
+    else if (pirTwoValue == 0 && messPir2){
         client.publish("/yard/circle/pir-2", "0");
-        messInputD6 == false;
+        messPir2 == false;
         }
     
-     if(inputD7Value == 1) {
+     if(pirThreeValue == 1) {
       client.publish("/yard/circle/pir-3", "1");
-      messInputD7 = true;
+      messPir3 = true;
     }
-    else if (inputD7Value == 0 && messInputD7){
+    else if (pirThreeValue == 0 && messPir3){
         client.publish("/yard/circle/pir-3", "0");
-        messInputD7 == false;
+        messPir3 == false;
         }
     
 
   } // End of 1500ms loop
   if (now - lastThirtySecond > 30000){
     lastThirtySecond = now;
-    //Serial.println("Delay 2 sec for DHT sensor");
-    //delay(2000);
-    // Get temperature event and print its value.
-    sensors_event_t event;  
-    dht.temperature().getEvent(&event);
-    if (isnan(event.temperature)) {
-      Serial.println("Error reading temperature!");
-      client.publish("/yard/circle/temp", "Error reading temperature");
-      firstTempreadDone = false;
-
-    }
-    else {
-      if (!firstTempreadDone){
-        client.publish("/yard/circle/temp", "TempOK");
-        firstTempreadDone = true;
-      }
-      tmp_temp = String(event.temperature);
-      tmp_temp.toCharArray(temp, tmp_temp.length() + 1); //packaging up the data to publish to mqtt whoa...
-      Serial.print("Temperature: ");
-      Serial.print(tmp_temp);
-      Serial.println(" *C");
-      client.publish("/yard/circle/temp", temp);
-  
-    }
-    // Get humidity event and print its value.
-    dht.humidity().getEvent(&event);
-    if (isnan(event.relative_humidity)) {
-      Serial.println("Error reading humidity!");
-      client.publish("/yard/circle/humidity", "Error reading humidity");
-      firstHumidityreadDone = false;
-    }
-    else {
-      if (!firstHumidityreadDone){
-        client.publish("/yard/circle/humidity", "HumidityOK");
-        firstHumidityreadDone = true;
-      }
-      tmp_hum = String(event.relative_humidity);
-      tmp_hum.toCharArray(hum, tmp_hum.length() + 1); //packaging up the data to publish to mqtt whoa...
-      Serial.print("Humidity: ");
-      Serial.print(tmp_hum);
-      Serial.println("%");
-      client.publish("/yard/circle/humidity", hum);
-    }
+    
     
   }
   
   if (now - lastHeartBeat > 90000) {
     lastHeartBeat = now;
-    client.publish("/oam/heartbeat/sensormodule", "mqttYardCircle");
+    client.publish("/oam/heartbeat/sensormodule", "AutoConfigWifiManager");
   }
 }
